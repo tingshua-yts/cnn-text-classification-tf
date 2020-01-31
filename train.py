@@ -26,7 +26,8 @@ tf.flags.DEFINE_float("l2_reg_lambda", 0.0, "L2 regularization lambda (default: 
 
 # Training parameters
 tf.flags.DEFINE_integer("batch_size", 64, "Batch Size (default: 64)")
-tf.flags.DEFINE_integer("num_epochs", 200, "Number of training epochs (default: 200)")
+tf.flags.DEFINE_integer("num_epochs", 1, "Number of training epochs (default: 200)")
+#tf.flags.DEFINE_integer("num_epochs", 200, "Number of training epochs (default: 200)")
 tf.flags.DEFINE_integer("evaluate_every", 100, "Evaluate model on dev set after this many steps (default: 100)")
 tf.flags.DEFINE_integer("checkpoint_every", 100, "Save model after this many steps (default: 100)")
 tf.flags.DEFINE_integer("num_checkpoints", 5, "Number of checkpoints to store (default: 5)")
@@ -45,11 +46,11 @@ def preprocess():
     # Data Preparation
     # ==================================================
 
-    # Load data
+    # Load data, x_text返回的是post + neg 的sentence，y是对应的lebal，[0, 1]表示post，[1,0]表示negt
     print("Loading data...")
     x_text, y = data_helpers.load_data_and_labels(FLAGS.positive_data_file, FLAGS.negative_data_file)
 
-    # Build vocabulary
+    # Build vocabulary, x是一个dict类型，key为vocab的id，value为word
     max_document_length = max([len(x.split(" ")) for x in x_text])
     vocab_processor = learn.preprocessing.VocabularyProcessor(max_document_length)
     x = np.array(list(vocab_processor.fit_transform(x_text)))
@@ -66,6 +67,7 @@ def preprocess():
     x_train, x_dev = x_shuffled[:dev_sample_index], x_shuffled[dev_sample_index:]
     y_train, y_dev = y_shuffled[:dev_sample_index], y_shuffled[dev_sample_index:]
 
+    # dereference https://stackoverflow.com/questions/39255371/when-am-i-supposed-to-use-del-in-python
     del x, y, x_shuffled, y_shuffled
 
     print("Vocabulary Size: {:d}".format(len(vocab_processor.vocabulary_)))
@@ -92,6 +94,7 @@ def train(x_train, y_train, vocab_processor, x_dev, y_dev):
                 l2_reg_lambda=FLAGS.l2_reg_lambda)
 
             # Define Training procedure
+            # train op都是一般都是一个求loss最小值的优化函数
             global_step = tf.Variable(0, name="global_step", trainable=False)
             optimizer = tf.train.AdamOptimizer(1e-3)
             grads_and_vars = optimizer.compute_gradients(cnn.loss)
@@ -148,6 +151,7 @@ def train(x_train, y_train, vocab_processor, x_dev, y_dev):
                   cnn.input_y: y_batch,
                   cnn.dropout_keep_prob: FLAGS.dropout_keep_prob
                 }
+                # run中传递多个op是为了能够获取多个op的结果，然后在日志中显示。其实都已经包含在train_op中
                 _, step, summaries, loss, accuracy = sess.run(
                     [train_op, global_step, train_summary_op, cnn.loss, cnn.accuracy],
                     feed_dict)
@@ -175,6 +179,7 @@ def train(x_train, y_train, vocab_processor, x_dev, y_dev):
             # Generate batches
             batches = data_helpers.batch_iter(
                 list(zip(x_train, y_train)), FLAGS.batch_size, FLAGS.num_epochs)
+
             # Training loop. For each batch...
             for batch in batches:
                 x_batch, y_batch = zip(*batch)

@@ -43,6 +43,7 @@ else:
     y_test = [1, 0]
 
 # Map data into vocabulary
+# 将评测的数据x_raw按照训练时候的词表转换成vector
 vocab_path = os.path.join(FLAGS.checkpoint_dir, "..", "vocab")
 vocab_processor = learn.preprocessing.VocabularyProcessor.restore(vocab_path)
 x_test = np.array(list(vocab_processor.transform(x_raw)))

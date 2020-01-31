@@ -12,6 +12,7 @@ class TextCNN(object):
       embedding_size, filter_sizes, num_filters, l2_reg_lambda=0.0):
 
         # Placeholders for input, output and dropout
+        # None是为了可以支持不同大小的batch_size
         self.input_x = tf.placeholder(tf.int32, [None, sequence_length], name="input_x")
         self.input_y = tf.placeholder(tf.float32, [None, num_classes], name="input_y")
         self.dropout_keep_prob = tf.placeholder(tf.float32, name="dropout_keep_prob")
@@ -24,26 +25,28 @@ class TextCNN(object):
             self.W = tf.Variable(
                 tf.random_uniform([vocab_size, embedding_size], -1.0, 1.0),
                 name="W")
-            self.embedded_chars = tf.nn.embedding_lookup(self.W, self.input_x)
-            self.embedded_chars_expanded = tf.expand_dims(self.embedded_chars, -1)
+            self.embedded_chars = tf.nn.embedding_lookup(self.W, self.input_x) # [batch_size, sequence_length, embedding_size].
+            self.embedded_chars_expanded = tf.expand_dims(self.embedded_chars, -1) # [batch_size, sequence_length, embedding_size, 1].
 
         # Create a convolution + maxpool layer for each filter size
         pooled_outputs = []
         for i, filter_size in enumerate(filter_sizes):
             with tf.name_scope("conv-maxpool-%s" % filter_size):
-                # Convolution Layer
+                # Convolution Layer,
                 filter_shape = [filter_size, embedding_size, 1, num_filters]
-                W = tf.Variable(tf.truncated_normal(filter_shape, stddev=0.1), name="W")
+                W = tf.Variable(tf.truncated_normal(filter_shape, stddev=0.1), name="W") # 产生截断正态分布随机数，取值范围为 [ mean - 2 * stddev, mean + 2 * stddev ]
                 b = tf.Variable(tf.constant(0.1, shape=[num_filters]), name="b")
-                conv = tf.nn.conv2d(
+                conv = tf.nn.conv2d( # 最需要关注的是W的[filter_size,embedding_size]和embedded_chars_expanded的[sequence_length,embedding_size]进行卷积运算
                     self.embedded_chars_expanded,
                     W,
                     strides=[1, 1, 1, 1],
                     padding="VALID",
                     name="conv")
+
                 # Apply nonlinearity
                 h = tf.nn.relu(tf.nn.bias_add(conv, b), name="relu")
-                # Maxpooling over the outputs
+
+                # Maxpooling over the outputs,目的是减少feature map的大小
                 pooled = tf.nn.max_pool(
                     h,
                     ksize=[1, sequence_length - filter_size + 1, 1, 1],
@@ -71,10 +74,12 @@ class TextCNN(object):
             l2_loss += tf.nn.l2_loss(W)
             l2_loss += tf.nn.l2_loss(b)
             self.scores = tf.nn.xw_plus_b(self.h_drop, W, b, name="scores")
-            self.predictions = tf.argmax(self.scores, 1, name="predictions")
+            # evaluate时，使用的tensor. tf.argmax gives you the index of maximum value along the specified axis.
+            self.predictions = tf.argmax(self.scores, 1, name="predictions") # 得到的是score最高类别的下标
 
         # Calculate mean cross-entropy loss
         with tf.name_scope("loss"):
+            # 将scores和input_y作为loss的计算
             losses = tf.nn.softmax_cross_entropy_with_logits(logits=self.scores, labels=self.input_y)
             self.loss = tf.reduce_mean(losses) + l2_reg_lambda * l2_loss
 
